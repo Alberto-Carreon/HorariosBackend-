@@ -1,0 +1,20 @@
+async function applySearch(){
+  const tipos = $$('input[name="tipo"]:checked').map(i=>i.value);
+  const dia = $('#fDia').value||'';
+  const hora = $('#fHora').value||'';
+  const nombre = ($('#fNombre').value||'');
+  const subjects = picker.get();
+
+  const qs = new URLSearchParams();
+  if (tipos.length) qs.set('types', tipos.join(','));
+  if (dia) qs.set('day', dia);
+  if (hora) qs.set('hour', hora);
+  if (nombre) qs.set('name', nombre);
+  if (subjects.length) qs.set('subject', subjects.join(','));
+
+  currentResults = (await api('/schedules.php?'+qs.toString())).items || [];
+
+  try { await api('/logs.php', {method:'POST', body: JSON.stringify({type:'search', account:user.id, filters:{tipos, materias:subjects, dia, hora, nombre}})}); } catch(e){}
+
+  currentPage=1; renderResultsPage();
+}
