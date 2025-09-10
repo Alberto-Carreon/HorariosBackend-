@@ -1,5 +1,1 @@
-async function addSchedule({owner, type, day, start, end, subjects=[]}){
-  const body = { ownerId:owner.id, ownerRole:owner.role, ownerName:owner.name||'', email:owner.email||'', type, day, start, end, subjects };
-  const r = await api('/schedules.php', { method:'POST', body: JSON.stringify(body) });
-  return r.id;
-}
+
