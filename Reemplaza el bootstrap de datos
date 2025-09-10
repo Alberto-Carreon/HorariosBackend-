@@ -1,0 +1,5 @@
+async function bootstrapData(){
+  const allow = await api('/allowlist.php');      state.allow = allow;
+  const mats  = await api('/materias.php');       state.catalog.materias = mats.materias||[];
+  save(); // sólo para sesión/estado visual; horarios ya no van a LS
+}
