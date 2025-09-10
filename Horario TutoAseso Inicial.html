@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Horarios Asesoría Disciplinar y  Mentoría Académica. FI-UAEMéx</title>
+  <!-- Tailwind CDN para utilidades; estilos propios en CSS plano -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {50:'#e8f0ff',100:'#cfe0ff',200:'#a9c7ff',300:'#7aa7ff',400:'#4b84ff',500:'#2e61f0',600:'#234bca',700:'#1f3ea1',800:'#1c367e',900:'#0b1b4f'}
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    /* Fondo más oscuro en tonos azules */
+    body { background: linear-gradient(135deg, #0b1b4f 0%, #1c367e 35%, #2e61f0 100%); }
+
+    /* Estilos propios sin @apply (compatibles con CDN) */
+    .input{width:100%;border-radius:0.75rem;border:1px solid #000;background:rgba(255,255,255,.94);padding:.5rem .75rem;outline:none;color:#0b1b4f}
+    .input:focus{box-shadow:0 0 0 4px rgba(46,97,240,.25)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:.75rem;padding:.5rem .9rem;font-weight:700}
+    .btn-primary{background:#2e61f0;color:#fff}
+    .btn-primary:hover{background:#234bca}
+    .btn-soft{background:#fff;border:1px solid #000;color:#0b1b4f}
+    .btn-soft:hover{background:#f8fafc}
+    .btn-link{background:transparent;color:#0b1b4f;text-decoration:underline}
+    .card{border-radius:1rem;background:rgba(255,255,255,.94);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.5);color:#0b1b4f}
+    .pill{display:inline-flex;align-items:center;border-radius:9999px;background:#e2e8f0;padding:2px 8px;font-size:12px;font-weight:700;color:#0b1b4f;border:1px solid #000}
+    .chip{display:inline-flex;align-items:center;border-radius:9999px;border:1px solid #000;padding:2px 8px;font-size:12px;font-weight:700;margin-right:4px;margin-bottom:4px;background:#fff;color:#0b1b4f}
+    .chip button{margin-left:6px;color:#0b1b4f}
+    .chip button:hover{color:#1f2937}
+    .menu{position:absolute;z-index:50;margin-top:4px;max-height:14rem;width:100%;overflow:auto;border-radius:.75rem;border:1px solid #000;background:#fff;box-shadow:0 10px 15px -3px rgba(0,0,0,.4),0 4px 6px -4px rgba(0,0,0,.3)}
+    .menu li{padding:.5rem .75rem;font-size:.95rem;cursor:pointer}
+    .menu li:hover{background:#eef2ff}
+    .disabled{opacity:.5;pointer-events:none}
+
+    /* Dropdown simple */
+    .dropdown{position:relative}
+    .dropdown-menu{position:absolute;right:0;top:100%;margin-top:.5rem;background:#fff;border:1px solid #000;border-radius:.75rem;box-shadow:0 10px 15px -3px rgba(0,0,0,.35),0 4px 6px -4px rgba(0,0,0,.25);min-width:320px;overflow:hidden}
+    .dropdown-item{display:flex;gap:.5rem;align-items:center;padding:.7rem 1rem;font-weight:800;color:#0b1b4f}
+    .dropdown-item:hover{background:#eef2ff}
+
+    /* Modal genérico */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:1rem}
+    .modal.show{display:flex}
+  </style>
+</head>
+<body class="min-h-screen text-slate-50">
+  <!-- NAV -->
+  <header class="sticky top-0 z-40 bg-white/10 backdrop-blur-md border-b border-white/20">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-brand-600 text-white grid place-content-center font-black">H</div>
+        <div>
+          <h1 class="text-lg font-bold leading-tight text-white">Horarios Asesoría Disciplinar y  Mentoría Académica. FI-UAEMéx</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Menú superior para registrar horarios -->
+        <div class="dropdown" id="topMenuWrap">
+          <button class="btn btn-soft" id="topMenuBtn">Registrar horario ▾</button>
+          <div class="dropdown-menu hidden" id="topMenu">
+            <button class="dropdown-item w-full text-left" id="menuAsesoria">Asesoría Disciplinar (profesor(a)/Tutor(a))</button>
+            <button class="dropdown-item w-full text-left" id="menuMentoria">Mentoría (alumno(a))</button>
+          </div>
+        </div>
+        <button id="adminBtn" class="btn btn-soft">Administrador</button>
+        <button id="seedBtn" class="btn btn-soft hidden">Cargar demo</button>
+        <button id="logoutBtn" class="btn btn-soft hidden">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <section id="screen"></section>
+  </main>
+
+  <!-- Modal Admin -->
+  <div id="adminModal" class="modal">
+    <div class="card max-w-md w-full p-6">
+      <h3 class="text-lg font-bold">Acceso de Administrador</h3>
+      <form id="adminForm" class="mt-4 space-y-3">
+        <label class="block">
+          <span class="text-sm font-medium">correo</span>
+          <input id="adminUser" class="input mt-1" placeholder="correo" />
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Contraseña</span>
+          <input id="adminPass" type="password" class="input mt-1" placeholder="••••••" />
+        </label>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" class="btn btn-soft" id="adminCancel">Cancelar</button>
+          <button class="btn btn-primary">Entrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Copiar Tutorial → Asesoría -->
+  <div id="copyModal" class="modal">
+    <div class="card max-w-lg w-full p-6">
+      <h3 class="text-lg font-bold">¿Usar este horario también como Asesoría Disciplinar?</h3>
+      <p class="text-sm text-slate-700 mt-1">Verifica que tu horario de <b>atención tutorial</b> sea correcto. Si deseas usar el <b>mismo día y hora</b> para <b>Asesoría Disciplinar</b>, selecciona las unidades de aprendizaje y confirma. Si usarás un horario diferente, cierra este aviso y registra una nueva entrada en "Tipo de horario → Asesoría disciplinar".</p>
+      <div id="copyPickerWrap" class="mt-4"></div>
+      <div class="flex items-center justify-end gap-2 pt-3">
+        <button class="btn btn-soft" id="copyCancel">No, gracias</button>
+        <button class="btn btn-primary" id="copyConfirm">Sí, copiar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /************************
+     * Config / Estado
+     ************************/
+    const DEV_DEMO = false; // Producción: false
+    const LS_KEY = 'horarios_mvp_v8';
+    const days = ['Lunes','Martes','Miercoles','Jueves','Viernes','Sabado']; // sin acentos
+    const TIME_SLOTS = genTimeSlots('07:00','20:30',30); // 30 min
+
+    const state = {
+      users: [],         // {id, role, name?, email?, rfc?, account?, createdAt}
+      schedules: [],     // {id, ownerId, ownerName, ownerRole, email, type, day, start, end, subjects[]}
+      logs: [],          // {id, tsISO, type:'search'|'contact', account, filters, scheduleId?, scheduleType?, subjectUsed?, personName?, personRole?}
+      session: null,     // {role, id}
+      catalog: { materias: [] }, // usar sin acentos
+      allow: { tutoresRFC: [], mentoresCuenta: [], alumnosCuenta: [] }
+    };
+
+    const $ = s=>document.querySelector(s); 
+    const $$ = s=>Array.from(document.querySelectorAll(s));
+    const uid = (p='id')=> `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+    const nowISO = ()=> new Date().toISOString();
+    const norm = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+
+    function load(){ try{ const raw = localStorage.getItem(LS_KEY); if(raw){ Object.assign(state, JSON.parse(raw)); } }catch(e){ console.error(e); } }
+    function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+    function setSession(session){ state.session = session; save(); render(); }
+
+    function genTimeSlots(start='07:00', end='20:30', stepMin=30){
+      const out=[]; const [sh,sm]=start.split(':').map(Number); const [eh,em]=end.split(':').map(Number);
+      let t=new Date(2000,0,1,sh,sm,0); const endT=new Date(2000,0,1,eh,em,0);
+      while(t<=endT){ out.push(`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`); t=new Date(t.getTime()+stepMin*60000); }
+      return out;
+    }
+
+    /************************
+    * CSV helpers (carga inicial e importación)
+    ************************/
+    async function tryFetchText(path){
+      try{ const res = await fetch(path, {cache:'no-store'}); if(!res.ok) return null; return await res.text(); }catch(_){ return null; }
+    }
+    function parseCSV(text){
+      // Simple CSV parser (1a fila = headers). Soporta campos simples sin comas.
+      const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.trim().length>0);
+      if(!lines.length) return [];
+      const headers = lines[0].split(',').map(h=>h.trim());
+      return lines.slice(1).map(line=>{
+        const cells = line.split(',');
+        const obj = {}; headers.forEach((h,i)=> obj[h]= (cells[i]||'').trim());
+        return obj;
+      });
+    }
+    function loadMateriasFromCsvText(t){
+      const rows = parseCSV(t); const list = rows.map(r=> r.materia).filter(Boolean);
+      if(list.length) state.catalog.materias = list; save();
+    }
+    function loadAllowFromCsvText(which, t){
+      const rows = parseCSV(t);
+      if(which==='tutores'){ state.allow.tutoresRFC = rows.map(r=> (r.rfc||'').toUpperCase()).filter(Boolean); }
+      if(which==='mentores'){ state.allow.mentoresCuenta = rows.map(r=> r.cuenta).filter(Boolean); }
+      if(which==='alumnos'){ state.allow.alumnosCuenta = rows.map(r=> r.cuenta).filter(Boolean); }
+      save();
+    }
+
+    async function bootstrapData(){
+      // Preferir CSV en /data/ o raíz
+      const mCSV = await tryFetchText('data/materias.csv') || await tryFetchText('materias.csv');
+      if(mCSV) loadMateriasFromCsvText(mCSV);
+
+      const tCSV = await tryFetchText('data/allowlist_tutores.csv') || await tryFetchText('allowlist_tutores.csv');
+      if(tCSV) loadAllowFromCsvText('tutores', tCSV);
+      const meCSV = await tryFetchText('data/allowlist_mentores.csv') || await tryFetchText('allowlist_mentores.csv');
+      if(meCSV) loadAllowFromCsvText('mentores', meCSV);
+      const aCSV = await tryFetchText('data/allowlist_alumnos.csv') || await tryFetchText('allowlist_alumnos.csv');
+      if(aCSV) loadAllowFromCsvText('alumnos', aCSV);
+
+      save();
+    }
+
+    /************************
+     * Render principal
+     ************************/
+    function render(){
+      const container = $('#screen');
+      const logoutBtn = $('#logoutBtn');
+      const seedBtn = $('#seedBtn');
+      if(seedBtn) seedBtn.classList.toggle('hidden', !DEV_DEMO);
+      if(logoutBtn) logoutBtn.classList.toggle('hidden', !state.session);
+      renderHome(container);
+    }
+
+    /************************
+     * Home minimalista: solo consulta
+     ************************/
+    function renderHome(container){
+      container.innerHTML = `
+        <div class="max-w-2xl mx-auto">
+          <article class="card p-8 text-center">
+            <h2 class="text-2xl font-extrabold mb-3">Consulta de horarios de <span class="text-brand-700">asesoría disciplinar</span> y <span class="text-brand-700">mentoría</span></h2>
+            <p class="text-sm text-slate-600">Encuentra rápidamente el horario y la unidad de aprendizaje que necesitas.</p>
+            <div class="mt-6">
+              <button class="btn btn-primary text-lg px-6" id="goConsulta">Consultar horarios</button>
+            </div>
+          </article>
+        </div>`;
+
+      $('#goConsulta').onclick = ()=> renderConsultaStart();
+
+      // Top dropdown actions
+      const menuBtn = $('#topMenuBtn');
+      const menu = $('#topMenu');
+      const wrap = $('#topMenuWrap');
+      menuBtn.onclick = ()=> menu.classList.toggle('hidden');
+      document.addEventListener('click', (e)=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+      $('#menuAsesoria').onclick = ()=> showLogin('tutor');
+      $('#menuMentoria').onclick = ()=> showLogin('mentor');
+
+      // Header buttons
+      if(DEV_DEMO) $('#seedBtn').onclick = seedDemo; // demo solo en desarrollo
+      $('#adminBtn').onclick = ()=> $('#adminModal').classList.add('show');
+      $('#logoutBtn').onclick = ()=>{ state.session=null; save(); render(); };
+
+      // Admin modal events
+      $('#adminCancel').onclick = ()=> $('#adminModal').classList.remove('show');
+      $('#adminForm').onsubmit = (e)=>{
+        e.preventDefault();
+        const p = $('#adminPass').value.trim();
+        if(p==='7ut0r1a.4pp'){
+          $('#adminModal').classList.remove('show');
+          setSession({role:'admin', id:'admin'});
+          renderAdmin($('#screen'));
+        } else {
+          alert('Credenciales incorrectas.');
+        }
+      };
+    }
+
+    /************************
+     * Flujo de consulta (Alumno)
+     ************************/
+    function renderConsultaStart(){
+      const container = $('#screen');
+      container.innerHTML = `
+        <div class="max-w-xl mx-auto card p-6">
+          <h2 class="text-xl font-bold">Ingresa tu número de cuenta</h2>
+          <form id="alumnoStart" class="mt-4 space-y-3">
+            <label class="block">
+              <span class="text-sm font-medium">Número de cuenta (7 dígitos)</span>
+              <input id="alumnoCuenta" class="input mt-1" placeholder="Escribe Número de Cuenta" required />
+            </label>
+            <div class="flex items-center justify-end gap-2 pt-2">
+              <button type="button" class="btn btn-soft" onclick="render()">Cancelar</button>
+              <button class="btn btn-primary">Continuar</button>
+            </div>
+          </form>
+        </div>`;
+
+      $('#alumnoStart').onsubmit = (e)=>{
+        e.preventDefault();
+        const id = $('#alumnoCuenta').value.trim();
+        if(!/^\d{7}$/.test(id)) return alert('El número de cuenta debe tener 7 dígitos.');
+        setSession({role:'alumno', id:id});
+        renderAlumno($('#screen'), {id});
+      };
+    }
+
+    /************************
+     * Login Tutor/Mentor con validación de correo institucional
+     ************************/
+    function validateInstitutionalEmail(email, role){
+      const tutorOk = /^[A-Za-z0-9._%+-]+@(uaemex\.mx|profesor\.uaemex\.mx)$/i;
+      const mentorOk = /^[A-Za-z0-9._%+-]+@(uaemex\.mx|alumno\.uaemex\.mx)$/i;
+      return role==='tutor' ? tutorOk.test(email) : mentorOk.test(email);
+    }
+
+    function showLogin(role){
+      const container = $('#screen');
+      const labels = {
+        tutor: {title:'Ingresar como Tutor(a)', idLabel:'RFC (4 letras + 6 dígitos, sin homoclave)', idPh:'AABC001231', help:'Debe existir en la lista blanca.'},
+        mentor: {title:'Ingresar como Mentor(a)', idLabel:'Número de cuenta (7 dígitos)', idPh:'Escribe Número de Cuenta', help:'Debe existir en la lista blanca.'}
+      }[role];
+
+      container.innerHTML = `
+        <div class="max-w-xl mx-auto card p-6">
+          <h2 class="text-xl font-bold">${labels.title}</h2>
+          <form id="loginForm" class="mt-5 space-y-3">
+            <label class="block">
+              <span class="text-sm font-medium">${labels.idLabel}</span>
+              <input id="loginId" class="input mt-1" placeholder="${labels.idPh}" required />
+            </label>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="block">
+                <span class="text-sm font-medium">Nombre (opcional)</span>
+                <input id="loginName" class="input mt-1" placeholder="Nombre y apellidos" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-medium">Correo Institucional</span>
+                <input id="loginEmail" class="input mt-1" type="email" placeholder="usuario@uaemex.mx" required />
+                <span class="text-xs text-slate-600">Dominios válidos: ${role==='tutor' ? '@uaemex.mx, @profesor.uaemex.mx' : '@uaemex.mx, @alumno.uaemex.mx'}</span>
+              </label>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+              <button type="button" class="btn btn-soft" onclick="render()">Cancelar</button>
+              <button class="btn btn-primary">Continuar</button>
+            </div>
+          </form>
+        </div>`;
+
+      $('#loginForm').onsubmit = (e)=>{
+        e.preventDefault();
+        const idRaw = $('#loginId').value.trim().toUpperCase();
+        const name = $('#loginName').value.trim();
+        const email = $('#loginEmail').value.trim();
+
+        if(role==='tutor'){
+          if(!/^[A-ZÑ&]{4}\d{6}$/.test(idRaw)) return alert('RFC inválido. Formato: 4 letras + 6 dígitos (sin homoclave).');
+          if(state.allow.tutoresRFC.length && !state.allow.tutoresRFC.includes(idRaw)) return alert('RFC no autorizado.');
+        }
+        if(role==='mentor'){
+          if(!/^\d{7}$/.test(idRaw)) return alert('Número de cuenta inválido. Debe tener 7 dígitos.');
+          if(state.allow.mentoresCuenta.length && !state.allow.mentoresCuenta.includes(idRaw)) return alert('Número de cuenta no autorizado.');
+        }
+        if(!validateInstitutionalEmail(email, role)){
+          return alert(`Escribe un Correo Institucional válido (${role==='tutor' ? '@uaemex.mx o @profesor.uaemex.mx' : '@uaemex.mx o @alumno.uaemex.mx'})`);
+        }
+
+        let user = state.users.find(u=>u.id===idRaw && u.role===role);
+        if(!user){
+          user = { id:idRaw, role, name, email, createdAt: nowISO() };
+          if(role==='tutor') user.rfc = idRaw; else user.account = idRaw;
+          state.users.push(user);
+        }else{ user.email = email; if(name) user.name = name; }
+        save();
+        setSession({role, id:idRaw});
+        if(role==='tutor') renderTutor($('#screen'), user); else renderMentor($('#screen'), user);
+      };
+    }
+
+    /************************
+     * Picker de materias (sin acentos, case-insensitive)
+     ************************/
+    function subjectPicker({mountId, selected=[], onChange, allowCustom=false}){
+      const mount = document.getElementById(mountId);
+      mount.innerHTML = `
+        <div class="relative">
+          <label class="block mb-1 text-sm font-medium">Unidades de aprendizaje</label>
+          <div class="flex flex-wrap items-center gap-1 mb-1" id="${mountId}_chips"></div>
+          <input id="${mountId}_input" class="input" placeholder="Escribe para filtrar y presiona Enter o elige de la lista" autocomplete="off" />
+          <ul id="${mountId}_menu" class="menu hidden"></ul>
+          <div id="${mountId}_hint" class="text-xs text-slate-600 mt-1"></div>
+        </div>`;
+
+      const input = document.getElementById(`${mountId}_input`);
+      const menu = document.getElementById(`${mountId}_menu`);
+      const chips = document.getElementById(`${mountId}_chips`);
+      const hint = document.getElementById(`${mountId}_hint`);
+
+      function srcMaterias(){ return (state.catalog.materias||[]); }
+
+      function renderHint(){
+        if(!srcMaterias().length){
+          hint.textContent = 'No hay materias en el catálogo.';
+        } else { hint.textContent = ''; }
+      }
+
+      function renderChips(){
+        chips.innerHTML = selected.map(v=>`<span class="chip">${escapeHtml(v)}<button data-x="${escapeHtml(v)}">×</button></span>`).join('');
+        chips.querySelectorAll('button[data-x]').forEach(b=> b.onclick = ()=>{ selected = selected.filter(x=>x!==b.dataset.x); onChange([...selected]); renderChips(); });
+      }
+      function showMenu(list){
+        if(!list.length){ menu.classList.add('hidden'); return; }
+        menu.innerHTML = list.slice(0,50).map(v=>`<li data-v="${escapeHtml(v)}">${escapeHtml(v)}</li>`).join('');
+        menu.classList.remove('hidden');
+        menu.querySelectorAll('li').forEach(li=> li.onclick = ()=>{ addItem(li.dataset.v); });
+      }
+      function addItem(v){ if(!v||selected.includes(v)) return; selected.push(v); onChange([...selected]); renderChips(); input.value=''; menu.classList.add('hidden'); input.focus(); }
+      function filter(q){ const src = srcMaterias(); const nq = norm(q); const list = src.filter(m => norm(m).includes(nq) && !selected.includes(m)); showMenu(list); }
+      input.addEventListener('input', ()=> filter(input.value));
+      input.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v = input.value.trim(); if(!v) return;
+          const src = srcMaterias();
+          const exact = src.find(m=> norm(m)===norm(v));
+          if(!allowCustom && !exact){ alert('Selecciona del catálogo.'); return; }
+          addItem(exact||v);
+        }
+      });
+      document.addEventListener('click', (e)=>{ if(!mount.contains(e.target)) menu.classList.add('hidden'); });
+      renderChips(); renderHint();
+
+      return { get: ()=>[...selected] };
+    }
+
+    function escapeHtml(s=''){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+    /************************
+     * Helper: Select de horas (24h, medias horas)
+     ************************/
+    function timeSelect(id){
+      return `<select id="${id}" class="input mt-1">${TIME_SLOTS.map(h=>`<option value="${h}">${h}</option>`).join('')}</select>`;
+    }
+
+    /************************
+     * Tutor Dashboard (Solo Tutorial + Asesoría)
+     ************************/
+    function renderTutor(container, user){
+      container.innerHTML = `
+        <div class="grid md:grid-cols-2 gap-6">
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <div>
+                <h2 class="text-lg font-bold">Registro de horarios (Tutor)</h2>
+                <p class="text-sm text-slate-700">RFC: <span class="font-mono">${user.id}</span> • ${user.email||'sin correo'}</p>
+              </div>
+              <span class="pill">Tutorial • Asesoría</span>
+            </header>
+            <form id="formTutor" class="mt-4 space-y-3">
+              <label class="block">
+                <span class="text-sm font-medium">Tipo de horario</span>
+                <select id="tutorTipo" class="input mt-1">
+                  <option value="tutorial">Atención tutorial</option>
+                  <option value="asesoria">Asesoría disciplinar</option>
+                </select>
+              </label>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label class="block">
+                  <span class="text-sm font-medium">Día</span>
+                  <select id="tutorDia" class="input mt-1">${days.map(d=>`<option>${d}</option>`).join('')}</select>
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Hora inicio</span>
+                  ${timeSelect('tutorInicio')}
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Hora fin</span>
+                  ${timeSelect('tutorFin')}
+                </label>
+              </div>
+              <div id="wrapMateriasTutor" class="hidden">
+                <div id="pickerTutor"></div>
+              </div>
+              <div class="flex items-center justify-end pt-2">
+                <button class="btn btn-primary" id="btnGuardarTutor">Guardar horario</button>
+              </div>
+            </form>
+          </section>
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <h3 class="text-lg font-bold">Mis horarios</h3>
+              <button class="btn btn-soft" id="btnBorrarMisHorarios">Borrar todos</button>
+            </header>
+            <div id="tablaTutor" class="mt-3"></div>
+          </section>
+        </div>`;
+
+      const tipoSel = $('#tutorTipo');
+      const wrapMat = $('#wrapMateriasTutor');
+      let picker = null;
+
+      function toggleMaterias(){
+        const needs = tipoSel.value === 'asesoria'; // Solo asesoría requiere materias
+        wrapMat.classList.toggle('hidden', !needs);
+        if(needs && !picker){ picker = subjectPicker({mountId:'pickerTutor', selected:[], onChange:()=>{}, allowCustom:false}); }
+      }
+      tipoSel.addEventListener('change', toggleMaterias); toggleMaterias();
+
+      $('#btnGuardarTutor').onclick = (e)=>{
+        e.preventDefault();
+        const tipo = tipoSel.value; // tutorial | asesoria
+        const dia = $('#tutorDia').value;
+        const ini = $('#tutorInicio').value;
+        const fin = $('#tutorFin').value;
+        if(!ini || !fin || fin <= ini) return alert('Verifica el rango de horas.');
+        const subjects = (tipo==='tutorial')? [] : (picker? picker.get(): []);
+        if(tipo==='asesoria' && subjects.length===0) return alert('Selecciona al menos una unidad de aprendizaje.');
+
+        const schedId = addSchedule({owner:user, type:tipo, day:dia, start:ini, end:fin, subjects});
+        renderTutorTable(user);
+
+        if(tipo==='tutorial'){
+          openCopyModal({owner:user, day:dia, start:ini, end:fin, baseId:schedId});
+        } else {
+          alert('Horario guardado.');
+        }
+      };
+
+      $('#btnBorrarMisHorarios').onclick = ()=>{
+        if(!confirm('¿Borrar todos tus horarios?')) return;
+        state.schedules = state.schedules.filter(s=> s.ownerId!==user.id);
+        save(); renderTutorTable(user);
+      };
+
+      renderTutorTable(user);
+    }
+
+    function openCopyModal({owner, day, start, end, baseId}){
+      const modal = $('#copyModal');
+      modal.classList.add('show');
+      $('#copyPickerWrap').innerHTML = '<div id="copyPicker"></div>';
+      const cp = subjectPicker({mountId:'copyPicker', selected:[], onChange:()=>{}, allowCustom:false});
+      $('#copyCancel').onclick = ()=> modal.classList.remove('show');
+      $('#copyConfirm').onclick = ()=>{
+        const subjects = cp.get();
+        if(subjects.length===0){ alert('Selecciona al menos una unidad de aprendizaje.'); return; }
+        addSchedule({owner, type:'asesoria', day, start, end, subjects});
+        modal.classList.remove('show');
+        alert('Se creó la Asesoría disciplinar con el mismo horario.');
+        renderTutorTable(owner);
+      };
+    }
+
+    function renderTutorTable(user){
+      const wrap = $('#tablaTutor');
+      const my = state.schedules.filter(s=> s.ownerId===user.id);
+      if(!my.length){ wrap.innerHTML = `<p class="text-sm text-slate-700">Sin horarios registrados.</p>`; return; }
+      wrap.innerHTML = tableSchedules(my, true);
+      $$('#tablaTutor button[data-del]').forEach(btn=> btn.onclick = ()=>{ const id = btn.dataset.del; state.schedules = state.schedules.filter(s=> s.id!==id); save(); renderTutorTable(user); });
+    }
+
+    /************************
+     * Mentor Dashboard (Solo Mentoría)
+     ************************/
+    function renderMentor(container, user){
+      container.innerHTML = `
+        <div class="grid md:grid-cols-2 gap-6">
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <div>
+                <h2 class="text-lg font-bold">Registro de horarios (Mentor)</h2>
+                <p class="text-sm text-slate-700">Cuenta: <span class="font-mono">${user.id}</span> • ${user.email||'sin correo'}</p>
+              </div>
+              <span class="pill">Mentoría</span>
+            </header>
+            <form id="formMentor" class="mt-4 space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label class="block">
+                  <span class="text-sm font-medium">Día</span>
+                  <select id="mentorDia" class="input mt-1">${days.map(d=>`<option>${d}</option>`).join('')}</select>
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Hora inicio</span>
+                  ${timeSelect('mentorInicio')}
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Hora fin</span>
+                  ${timeSelect('mentorFin')}
+                </label>
+              </div>
+              <div id="pickerMentor"></div>
+              <div class="flex items-center justify-end pt-2">
+                <button class="btn btn-primary" id="btnGuardarMentor">Guardar horario</button>
+              </div>
+            </form>
+          </section>
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <h3 class="text-lg font-bold">Mis horarios</h3>
+              <button class="btn btn-soft" id="btnBorrarMisHorariosM">Borrar todos</button>
+            </header>
+            <div id="tablaMentor" class="mt-3"></div>
+          </section>
+        </div>`;
+
+      const picker = subjectPicker({mountId:'pickerMentor', selected:[], onChange:()=>{}, allowCustom:false});
+
+      $('#btnGuardarMentor').onclick = (e)=>{
+        e.preventDefault();
+        const dia = $('#mentorDia').value;
+        const ini = $('#mentorInicio').value;
+        const fin = $('#mentorFin').value;
+        const subjects = picker.get();
+        if(!ini || !fin || fin<=ini) return alert('Verifica el rango de horas.');
+        if(!subjects.length) return alert('Selecciona al menos una unidad de aprendizaje.');
+        addSchedule({owner:user, type:'mentoria', day:dia, start:ini, end:fin, subjects});
+        renderMentorTable(user);
+        alert('Horario guardado.');
+      };
+
+      $('#btnBorrarMisHorariosM').onclick = ()=>{
+        if(!confirm('¿Borrar todos tus horarios?')) return;
+        state.schedules = state.schedules.filter(s=> s.ownerId!==user.id);
+        save(); renderMentorTable(user);
+      };
+
+      renderMentorTable(user);
+    }
+
+    function renderMentorTable(user){
+      const wrap = $('#tablaMentor');
+      const my = state.schedules.filter(s=> s.ownerId===user.id);
+      if(!my.length){ wrap.innerHTML = `<p class="text-sm text-slate-700">Sin horarios registrados.</p>`; return; }
+      wrap.innerHTML = tableSchedules(my, true);
+      $$('#tablaMentor button[data-del]').forEach(btn=> btn.onclick = ()=>{ const id = btn.dataset.del; state.schedules = state.schedules.filter(s=> s.id!==id); save(); renderMentorTable(user); });
+    }
+
+    /************************
+     * Consulta (Alumno) con paginación
+     ************************/
+    function renderAlumno(container, user){
+      container.innerHTML = `
+        <div class="grid md:grid-cols-2 gap-6">
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <div>
+                <h2 class="text-lg font-bold">Consulta de horarios</h2>
+                <p class="text-sm text-slate-700">Cuenta: <span class="font-mono">${user.id}</span></p>
+              </div>
+            </header>
+            <form id="formBuscar" class="mt-4 space-y-3">
+              <fieldset>
+                <legend class="text-sm font-medium">Tipo</legend>
+                <div class="mt-1 grid grid-cols-2 gap-2 text-slate-800">
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded border-black" name="tipo" value="asesoria" checked/> Asesoría disciplinar</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded border-black" name="tipo" value="mentoria" checked/> Mentoría</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded border-black" name="tipo" value="tutorial"/> Atención tutorial</label>
+                </div>
+              </fieldset>
+              <div id="pickerAlumno"></div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label class="block">
+                  <span class="text-sm font-medium">Día (opcional)</span>
+                  <select id="fDia" class="input mt-1"><option value="">Todos</option>${days.map(d=>`<option>${d}</option>`).join('')}</select>
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Hora (opcional)</span>
+                  <select id="fHora" class="input mt-1"><option value="">Todas</option>${TIME_SLOTS.map(h=>`<option value="${h}">${h}</option>`).join('')}</select>
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Nombre (opcional)</span>
+                  <input id="fNombre" class="input mt-1" placeholder="Tutor/Mentor" />
+                </label>
+              </div>
+              <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" class="btn btn-soft" id="btnLimpiar">Limpiar</button>
+                <button class="btn btn-primary">Buscar</button>
+              </div>
+            </form>
+          </section>
+          <section class="card p-6">
+            <header class="flex items-start justify-between">
+              <h3 class="text-lg font-bold">Resultados</h3>
+              <span id="countResultados" class="pill">0 encontrados</span>
+            </header>
+            <div id="listResultados" class="mt-3 grid gap-3"></div>
+            <div id="paginacion" class="mt-4 flex items-center justify-between hidden">
+              <button class="btn btn-soft" id="prevPage">← Anterior</button>
+              <div class="text-sm"><span id="pageInfo">Página 1 de 1</span></div>
+              <button class="btn btn-soft" id="nextPage">Siguiente →</button>
+            </div>
+          </section>
+        </div>`;
+
+      const picker = subjectPicker({mountId:'pickerAlumno', selected:[], onChange:()=>{}, allowCustom:false});
+      let currentPage = 1; const pageSize = 6; let currentResults = [];
+
+      function applySearch(){
+        const tipos = $$('input[name="tipo"]:checked').map(i=>i.value);
+        const materias = picker.get();
+        const dia = $('#fDia').value.trim();
+        const hora = $('#fHora').value;
+        const nombre = $('#fNombre').value.trim().toLowerCase();
+
+        currentResults = state.schedules.filter(s=>{
+          if(!tipos.includes(s.type)) return false;
+          if(dia && s.day!==dia) return false;
+          if(hora && !(s.start<=hora && hora<=s.end)) return false;
+          if(nombre && !(s.ownerName||'').toLowerCase().includes(nombre)) return false;
+          if(materias.length){ if(s.type==='tutorial') return false; const hasAny = (s.subjects||[]).some(m => materias.includes(m)); if(!hasAny) return false; }
+          return true;
+        });
+
+        logEvent({ type:'search', account:user.id, filters:{ tipos, materias, dia, hora, nombre } });
+        currentPage = 1; renderResultsPage();
+      }
+
+      function renderResultsPage(){
+        $('#countResultados').textContent = `${currentResults.length} resultado${currentResults.length===1?'':'s'}`;
+        const wrap = $('#listResultados');
+        if(!currentResults.length){ wrap.innerHTML = `<p class="text-sm text-slate-700">No se encontraron horarios con los filtros seleccionados.</p>`; $('#paginacion').classList.add('hidden'); return; }
+        const start = (currentPage-1)*pageSize; const end = start+pageSize;
+        const pageItems = currentResults.slice(start,end);
+        wrap.innerHTML = pageItems.map(s=> cardResultado(s, user)).join('');
+        $$('#listResultados a[data-teams]').forEach(a => a.onclick = ()=>{
+          const s = state.schedules.find(x=> x.id===a.dataset.teams);
+          if(s) logEvent({ type:'contact', account: user.id, scheduleId: s.id, scheduleType: s.type, personName: s.ownerName, personRole: s.ownerRole, subjectUsed: (s.subjects||[]).join(', ') });
+        });
+        const totalPages = Math.max(1, Math.ceil(currentResults.length / pageSize));
+        $('#pageInfo').textContent = `Página ${currentPage} de ${totalPages}`;
+        $('#paginacion').classList.remove('hidden');
+        $('#prevPage').classList.toggle('disabled', currentPage===1);
+        $('#nextPage').classList.toggle('disabled', currentPage===totalPages);
+      }
+
+      $('#formBuscar').addEventListener('submit', (e)=>{ e.preventDefault(); applySearch(); });
+      $('#btnLimpiar').onclick = ()=>{ $$('#formBuscar input[type="checkbox"]').forEach(c=> c.checked = (c.value!=='tutorial')); $('#fDia').value=''; $('#fHora').value=''; $('#fNombre').value=''; renderAlumno(container, user); };
+      $('#prevPage').onclick = ()=>{ if(currentPage>1){ currentPage--; renderResultsPage(); } };
+      $('#nextPage').onclick = ()=>{ const totalPages = Math.max(1, Math.ceil(currentResults.length / pageSize)); if(currentPage<totalPages){ currentPage++; renderResultsPage(); } };
+
+      // Primera búsqueda automática
+      applySearch();
+    }
+
+    /************************
+     * Admin Panel (CSV: plantillas + importadores)
+     ************************/
+    function renderAdmin(container){
+      container.innerHTML = `
+        <div class="grid lg:grid-cols-3 gap-6">
+          <section class="card p-6 lg:col-span-2">
+            <header class="flex items-start justify-between">
+              <h2 class="text-lg font-bold">Consultas registradas</h2>
+              <div class="flex flex-wrap items-center gap-2">
+                <button class="btn btn-soft" id="btnBackup">Exportar respaldo (JSON)</button>
+                <label class="btn btn-soft cursor-pointer">Importar respaldo (JSON)
+                  <input type="file" id="restoreFile" class="hidden" accept="application/json" />
+                </label>
+                <div class="flex flex-wrap gap-2">
+                  <button class="btn btn-soft" id="csvMaterias">Plantilla Materias CSV</button>
+                  <button class="btn btn-soft" id="csvTutores">Plantilla Tutores CSV</button>
+                  <button class="btn btn-soft" id="csvMentores">Plantilla Mentores CSV</button>
+                  <button class="btn btn-soft" id="csvAlumnos">Plantilla Alumnos CSV</button>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <label class="btn btn-soft cursor-pointer">Importar Materias (CSV)
+                    <input type="file" id="importMateriasCsv" class="hidden" accept=".csv,text/csv" />
+                  </label>
+                  <label class="btn btn-soft cursor-pointer">Importar Tutores (CSV)
+                    <input type="file" id="importTutoresCsv" class="hidden" accept=".csv,text/csv" />
+                  </label>
+                  <label class="btn btn-soft cursor-pointer">Importar Mentores (CSV)
+                    <input type="file" id="importMentoresCsv" class="hidden" accept=".csv,text/csv" />
+                  </label>
+                  <label class="btn btn-soft cursor-pointer">Importar Alumnos (CSV)
+                    <input type="file" id="importAlumnosCsv" class="hidden" accept=".csv,text/csv" />
+                  </label>
+                </div>
+                <button class="btn btn-primary" id="btnExcel">Exportar a Excel</button>
+              </div>
+            </header>
+            <div class="mt-6 border-t border-black/20 pt-4">
+              <h3 class="text-lg font-bold">Listas blancas (agregar)</h3>
+              <div class="mt-4 grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block">
+                    <span class="text-sm font-medium">RFC de Tutor(a)/Profesor(a)</span>
+                    <input id="adminAddRFC" class="input mt-1" placeholder="AABC001231" />
+                  </label>
+                  <div class="mt-2 flex justify-end">
+                    <button class="btn btn-primary" id="btnAddRFC">Agregar RFC a tutores</button>
+                  </div>
+                </div>
+                <div>
+                  <label class="block">
+                    <span class="text-sm font-medium">Número de cuenta de Mentor(a) (7 dígitos)</span>
+                    <input id="adminAddMentor" class="input mt-1" placeholder="1234567" />
+                  </label>
+                  <div class="mt-2 flex justify-end">
+                    <button class="btn btn-primary" id="btnAddMentor">Agregar cuenta a mentores</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="tablaLogs" class="mt-6 overflow-auto"></div>
+          </section>
+          <section class="card p-6">
+            <h3 class="text-lg font-bold">Resumen</h3>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-center">
+              ${cardStat('Usuarios', state.users.length)}
+              ${cardStat('Horarios', state.schedules.length)}
+              ${cardStat('Consultas', state.logs.filter(l=>l.type==='search').length)}
+              ${cardStat('Contactos Teams', state.logs.filter(l=>l.type==='contact').length)}
+            </div>
+            <div class="mt-6">
+              <h4 class="font-semibold mb-2">Materias (catálogo)</h4>
+              <div class="max-h-40 overflow-auto">${(state.catalog.materias||[]).map(m=>`<span class="chip">${escapeHtml(m)}</span>`).join('') || '<p class="text-sm text-slate-700">Sin materias</p>'}</div>
+            </div>
+          </section>
+        </div>`;
+
+      renderLogsTable();
+      $('#btnExcel').onclick = exportExcel;
+      $('#btnBackup').onclick = ()=>{ const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `respaldo_horarios_${new Date().toISOString().slice(0,10)}.json`; a.click(); };
+      $('#restoreFile').onchange = (e)=> restoreFromFile(e.target.files[0]);
+
+      // Descargas CSV plantillas
+      $('#csvMaterias').onclick = ()=> downloadCsv('materias.csv', 'materia\nCalculo I\nAlgebra Lineal\nFisica I\nProgramacion I\n');
+      $('#csvTutores').onclick = ()=> downloadCsv('allowlist_tutores.csv', 'rfc\nAIBV791216\nAIRA481029\n');
+      $('#csvMentores').onclick = ()=> downloadCsv('allowlist_mentores.csv', 'cuenta\n1613343\n1920915\n');
+      $('#csvAlumnos').onclick = ()=> downloadCsv('allowlist_alumnos.csv', 'cuenta\n1821111\n1920003\n');
+
+      // Importadores CSV
+      $('#importMateriasCsv').onchange = (e)=> importMateriasCsv(e.target.files[0]);
+      $('#importTutoresCsv').onchange  = (e)=> importAllowCsv('tutores', e.target.files[0]);
+      $('#importMentoresCsv').onchange = (e)=> importAllowCsv('mentores', e.target.files[0]);
+      $('#importAlumnosCsv').onchange  = (e)=> importAllowCsv('alumnos', e.target.files[0]);
+    }
+
+    function renderLogsTable(){
+      const wrap = $('#tablaLogs');
+      const rows = state.logs.slice().reverse();
+      if(!rows.length){ wrap.innerHTML = `<p class="text-sm text-slate-700">Aún no hay registros.</p>`; return; }
+      wrap.innerHTML = `
+        <table class="min-w-full text-sm">
+          <thead class="sticky top-0 bg-white">
+            <tr class="text-left text-slate-800">
+              <th class="py-2 pr-3">Fecha</th>
+              <th class="py-2 pr-3">Tipo</th>
+              <th class="py-2 pr-3">Cuenta</th>
+              <th class="py-2 pr-3">Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(l=> `
+              <tr class="border-t border-black/20">
+                <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(l.tsISO)}</td>
+                <td class="py-2 pr-3">${l.type==='search'?'Búsqueda':'Contacto Teams'}</td>
+                <td class="py-2 pr-3 font-mono">${l.account||'-'}</td>
+                <td class="py-2 pr-3">${renderLogDetail(l)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function renderLogDetail(l){
+      if(l.type==='search'){
+        const f = l.filters||{};
+        return `Tipos: ${(f.tipos||[]).join(', ')||'—'} • Materias: ${(f.materias||[]).join(', ')||'—'} • Día: ${f.dia||'—'} • Hora: ${f.hora||'—'} • Nombre: ${f.nombre||'—'}`;
+      } else {
+        return `Con: ${l.personName||'—'} [${l.personRole||'—'}] • Tipo: ${l.scheduleType||'—'} • Materias: ${l.subjectUsed||'—'}`;
+      }
+    }
+
+    function cardStat(label, value){ return `<div class="card p-4"><div class="text-2xl font-black">${value}</div><div class="text-xs text-slate-700">${label}</div></div>`; }
+
+    function exportExcel(){
+      const data = state.logs.map(l=>({
+        Fecha: fmtDate(l.tsISO),
+        Tipo: l.type==='search'? 'Búsqueda':'Contacto Teams',
+        Cuenta: l.account||'',
+        Tipos: (l.filters?.tipos||[]).join(', '),
+        Materias: (l.filters?.materias||[]).join(', '),
+        Día: l.filters?.dia||'',
+        Hora: l.filters?.hora||'',
+        Nombre: l.filters?.nombre||'',
+        ContactoCon: l.personName||'',
+        Rol: l.personRole||'',
+        TipoHorario: l.scheduleType||'',
+        MateriasHorario: l.subjectUsed||''
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Consultas');
+      XLSX.writeFile(wb, `consultas_horarios_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function downloadCsv(name, content){ const blob = new Blob([content], {type:'text/csv;charset=utf-8'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
+    function restoreFromFile(file){ if(!file) return; const r = new FileReader(); r.onload = (ev)=>{ try{ const obj = JSON.parse(ev.target.result); ['users','schedules','logs','catalog','allow'].forEach(k=>{ if(obj[k]) state[k]=obj[k]; }); save(); render(); alert('Respaldo importado.'); }catch(_){ alert('Archivo inválido.'); } }; r.readAsText(file); }
+
+    async function importMateriasCsv(file){ if(!file) return; const t = await file.text(); loadMateriasFromCsvText(t); render(); alert('Materias CSV importadas.'); }
+    async function importAllowCsv(which, file){ if(!file) return; const t = await file.text(); loadAllowFromCsvText(which, t); render(); alert('Lista CSV importada.'); }
+
+    /************************
+     * Utilidades
+     ************************/
+    function addSchedule({owner, type, day, start, end, subjects=[]}){
+      const sched = { id:uid('sch'), ownerId:owner.id, ownerName:owner.name||'(Sin nombre)', ownerRole:owner.role, email:owner.email||'', type, day, start, end, subjects };
+      state.schedules.push(sched); save(); return sched.id;
+    }
+
+    function tableSchedules(list, canDelete=false){
+      const sorted = list.slice().sort((a,b)=> a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
+      return `<div class="overflow-auto"><table class="min-w-full text-sm"><thead class="sticky top-0 bg-white"><tr class="text-left text-slate-800"><th class="py-2 pr-3">Tipo</th><th class="py-2 pr-3">Día</th><th class="py-2 pr-3">Horario</th><th class="py-2 pr-3">Materias</th>${canDelete?'<th class="py-2 pr-3">Acciones</th>':''}</tr></thead><tbody>${sorted.map(s=>`<tr class="border-t border-black/20"><td class="py-2 pr-3">${s.type==='asesoria'?'Asesoría':(s.type==='mentoria'?'Mentoría':'Atención')}</td><td class="py-2 pr-3">${s.day}</td><td class="py-2 pr-3">${s.start} – ${s.end}</td><td class="py-2 pr-3">${(s.subjects||[]).join(', ')||'—'}</td>${canDelete?`<td class="py-2 pr-3"><button class="btn btn-soft" data-del="${s.id}">Eliminar</button></td>`:''}</tr>`).join('')}</tbody></table></div>`;
+    }
+
+    function fmtDate(iso){ const d=new Date(iso); const pad=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+    function logEvent(e){ state.logs.push({ id:uid('log'), tsISO: nowISO(), ...e }); save(); }
+
+    // Render tarjeta de resultado en Consulta
+    function msTeamsLink(email){ if(!email) return '#'; return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}`; }
+    function cardResultado(s, currentUser){
+      const tipoTxt = s.type==='asesoria' ? 'Asesoría disciplinar' : (s.type==='mentoria' ? 'Mentoría' : 'Atención tutorial');
+      const materias = (s.subjects||[]).map(x=>`<span class=\"chip\">${escapeHtml(x)}</span>`).join('') || '<span class=\"text-xs text-slate-600\">—</span>';
+      const canChat = !!s.email;
+      const chatBtn = canChat ? `<a class=\"btn btn-primary\" data-teams=\"${s.id}\" href=\"${msTeamsLink(s.email)}\" target=\"_blank\" rel=\"noopener\">Contactar por Teams</a>` : `<button class=\"btn btn-soft disabled\" title=\"Sin correo del tutor/mentor\">Contactar por Teams</button>`;
+      return `
+        <article class=\"card p-4\">
+          <div class=\"flex items-start justify-between gap-3\">
+            <div>
+              <div class=\"pill mb-2\">${tipoTxt}</div>
+              <h4 class=\"font-bold\">${escapeHtml(s.ownerName||'(Sin nombre)')}</h4>
+              <p class=\"text-sm text-slate-700\">${escapeHtml(s.day)} • ${escapeHtml(s.start)} – ${escapeHtml(s.end)}</p>
+              ${s.type!=='tutorial' ? `<div class=\"mt-2 flex flex-wrap gap-1\">${materias}</div>` : ''}
+            </div>
+            <div class=\"shrink-0\">${chatBtn}</div>
+          </div>
+        </article>`;
+    }
+
+    /************************
+     * Demo (solo desarrollo)
+     ************************/
+    function seedDemo(){
+      state.catalog.materias = ['Calculo I','Algebra Lineal','Fisica I','Programacion I','Estructuras de Datos','Probabilidad y Estadistica','Circuitos Electricos'];
+      state.allow.alumnosCuenta = ['1821111','1920003','1920009','1612370'];
+      state.allow.mentoresCuenta = ['1613343','1920915','1920945','2020989','1714133'];
+      state.allow.tutoresRFC = ['AIBV791216','AIRA481029','BEVF581010','DEHD750927','DICS640817'];
+
+      const t1 = {id:'AIBV791216', role:'tutor', name:'Dra. Elena Garcia', email:'elena.garcia@uaemex.mx', rfc:'AIBV791216', createdAt: nowISO()};
+      const m1 = {id:'1613343', role:'mentor', name:'Sofia Ramirez', email:'sofia.ramirez@alumno.uaemex.mx', account:'1613343', createdAt: nowISO()};
+      if(!state.users.find(u=>u.id===t1.id && u.role==='tutor')) state.users.push(t1);
+      if(!state.users.find(u=>u.id===m1.id && u.role==='mentor')) state.users.push(m1);
+
+      const mk = (owner, type, day, start, end, subjects=[])=> ({ id:uid('sch'), ownerId:owner.id, ownerName:owner.name||'(Sin nombre)', ownerRole:owner.role, email:owner.email||'', type, day, start, end, subjects });
+      state.schedules.push(mk(t1,'tutorial','Lunes','10:00','12:00'));
+      state.schedules.push(mk(t1,'asesoria','Miercoles','09:00','11:00',['Calculo I','Algebra Lineal']));
+      state.schedules.push(mk(m1,'mentoria','Viernes','10:00','12:00',['Fisica I','Calculo I']));
+
+      save(); alert('Datos de demo cargados.'); render();
+    }
+
+    // Event delegation para agregar a listas blancas desde Admin
+    document.addEventListener('click', (ev)=>{
+      if(ev.target && ev.target.id==='btnAddRFC'){
+        const input=$('#adminAddRFC'); if(!input) return;
+        const v=(input.value||'').trim().toUpperCase();
+        if(!/^[A-ZÑ&]{4}\d{6}$/.test(v)) return alert('RFC inválido. Formato: 4 letras + 6 dígitos (sin homoclave).');
+        if(state.allow.tutoresRFC.includes(v)) return alert('Este RFC ya está en la lista.');
+        state.allow.tutoresRFC.push(v); save(); alert('RFC agregado a tutores.'); renderAdmin($('#screen'));
+      }
+      if(ev.target && ev.target.id==='btnAddMentor'){
+        const input=$('#adminAddMentor'); if(!input) return;
+        const v=(input.value||'').trim();
+        if(!/^\d{7}$/.test(v)) return alert('Número de cuenta inválido. Debe tener 7 dígitos.');
+        if(state.allow.mentoresCuenta.includes(v)) return alert('Esta cuenta ya está en la lista.');
+        state.allow.mentoresCuenta.push(v); save(); alert('Cuenta agregada a mentores.'); renderAdmin($('#screen'));
+      }
+    });
+
+    // Boot
+    load();
+    bootstrapData().then(render);
+  </script>
+</body>
+</html>
