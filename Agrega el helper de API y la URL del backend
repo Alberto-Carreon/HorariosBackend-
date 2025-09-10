@@ -1,0 +1,11 @@
+<script>
+  const API_BASE = 'https://TU_DOMINIO/api'; // ← tu dominio
+  async function api(path, opts={}) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: {'content-type':'application/json', ...(state.session?.adminHeaders||{})},
+      ...opts
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+</script>
