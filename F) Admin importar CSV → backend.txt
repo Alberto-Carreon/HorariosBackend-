@@ -1,0 +1,33 @@
+F) Admin: importar CSV → backend
+
+Materias:
+
+$('#importMateriasCsv').onchange = async (e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  const list = text.replace(/\r/g,'').split('\n').slice(1).map(l=> (l.split(/[;,]/)[0]||'').trim()).filter(Boolean);
+  await api('/materias.php', {method:'POST', body: JSON.stringify({materias:list})});
+  alert('Materias importadas.');
+  const mats = await api('/materias.php'); state.catalog.materias = mats.materias||[]; renderAdmin($('#screen'));
+};
+
+
+Listas blancas: en lugar de empujar a state.allow, llama:
+
+await api('/allowlist.php?type=tutores',  {method:'POST', body: JSON.stringify({list:[v]})});
+await api('/allowlist.php?type=mentores', {method:'POST', body: JSON.stringify({list:[v]})});
+await api('/allowlist.php?type=alumnos',  {method:'POST', body: JSON.stringify({list:[v]})});
+
+
+Para eliminar usa:
+
+await api(`/allowlist.php?type=tutores&val=${encodeURIComponent(v)}`, {method:'DELETE'});
+// ... similar para mentores/alumnos
+
+
+Al entrar como admin, guarda headers para el backend:
+
+state.session = { role:'admin', id:'admin', adminHeaders:{ 'X-Admin-User': $('#adminUser').value.trim(), 'X-Admin-Pass': $('#adminPass').value.trim() } };
+
+
+Con lo anterior no cambiamos tu UI, sólo redirigimos las operaciones que antes tocaban state.schedules hacia el backend.
